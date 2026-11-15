@@ -9,7 +9,7 @@
 const uint8_t SOIL_MOISTURE_PIN = 0;          // GPIO0 / ADC1_CH0
 const uint8_t DHT_PIN = 4;                    // GPIO4
 const uint8_t PHOTO_RESISTOR_PIN = 1;         // GPIO1 / ADC1_CH1
-const uint8_t TOUCH_PIN = 3;                  // GPIO3, active-high TTP223 output
+const uint8_t TOUCH_PIN = 3;                  // GPIO3, active-high touch sensor output
 const uint8_t OLED_SDA_PIN = 7;               // GPIO7, connected to the OLED SDA wire
 const uint8_t OLED_SCL_PIN = 6;               // GPIO6, connected to the OLED SCL wire
 
@@ -257,7 +257,7 @@ void loop()
   const int currentPhotoValue = analogRead(PHOTO_RESISTOR_PIN);
   const bool photoRisingEdge = (currentPhotoValue >= PHOTO_RISING_THRESHOLD) && (lastPhotoValue < PHOTO_RISING_THRESHOLD);
 
-  // The ESP32-C3 has no capacitive-touch peripheral; use a digital touch module.
+  // The touch sensor drives GPIO3 high when touched.
   const bool touchPressed = (digitalRead(TOUCH_PIN) == HIGH);
 
   // If the photo sensor sees a rising edge, start a new 15-second display timer.

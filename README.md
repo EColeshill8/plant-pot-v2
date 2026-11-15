@@ -3,7 +3,7 @@
 Plant monitor firmware for an ESP32-C3 Super Mini. It reads a soil moisture
 sensor, a DHT11, and a photoresistor, and shows the readings on a 128x64 I2C
 OLED. The screen wakes when the light level crosses its threshold or the
-TTP223 touch sensor is pressed.
+built-in GPIO touch sensor is pressed.
 
 ## What you need
 
@@ -12,7 +12,6 @@ TTP223 touch sensor is pressed.
 - Capacitive soil moisture sensor
 - DHT11 temperature/humidity sensor
 - Photoresistor and a resistor for a voltage divider
-- TTP223 touch module
 - PlatformIO (the project is set up for VS Code)
 
 ## Wiring
@@ -24,7 +23,7 @@ Connect all grounds together. The sensors and OLED should use 3.3 V.
 | Soil moisture sensor | Analog output | 0 |
 | Photoresistor divider | Analog output | 1 |
 | DHT11 | Data | 4 |
-| TTP223 | Digital output | 3 |
+| Built-in touch sensor | Digital output (HIGH when touched) | 3 |
 | OLED | SDA | 7 |
 | OLED | SCL | 6 |
 
