@@ -44,6 +44,7 @@ signal a touch unless the input goes HIGH.
 4. Open the serial monitor at 115200 baud if you want to check startup messages.
 
 The display starts off. A GPIO3 rising edge or light-level crossing turns it on
-for about 15 seconds. Holding GPIO3 HIGH will not keep the display on. Sensor
-readings and diagnostic output are available once per second over serial at
-115200 baud, including the photo, touch, soil, DHT, and display timer values.
+for about 15 seconds. Holding GPIO3 HIGH will not keep the display on. The
+115200-baud serial monitor prints one short sensor summary per second, including
+the raw photo, GPIO3 ADC, and soil readings, plus temperature, humidity, and
+whether the OLED is on.

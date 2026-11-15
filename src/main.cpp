@@ -240,6 +240,7 @@ void setup()
   analogReadResolution(12);
   analogSetPinAttenuation(SOIL_MOISTURE_PIN, ADC_11db);
   analogSetPinAttenuation(PHOTO_RESISTOR_PIN, ADC_11db);
+  analogSetPinAttenuation(TOUCH_PIN, ADC_11db);
 
   // DHT11 sensor setup.
   dht.begin();
@@ -270,14 +271,12 @@ void loop()
   if (photoRisingEdge)
   {
     screenOnUntilMs = currentTime + SCREEN_ON_TIME_MS;
-    Serial.printf("event=photo_wake value=%d threshold=%u\n", currentPhotoValue, PHOTO_RISING_THRESHOLD);
   }
 
   // A held or floating-high input should not keep extending the display timer.
   if (touchRisingEdge)
   {
     screenOnUntilMs = currentTime + SCREEN_ON_TIME_MS;
-    Serial.println("event=touch_wake");
   }
 
   const bool screenShouldBeOn = (static_cast<int32_t>(screenOnUntilMs - currentTime) > 0);
@@ -292,23 +291,17 @@ void loop()
   {
     readSensors();
     lastSensorReadMs = currentTime;
+    const int touchRawValue = analogRead(TOUCH_PIN);
 
     Serial.printf(
-      "ms=%lu photo=%d threshold=%u touch=%d touch_edge=%d screen=%d remaining_ms=%lu soil_raw=%d soil_avg=%.0f soil_pct=%.1f dht_raw_temp=%.1f dht_raw_humidity=%.1f temp=%.1f humidity=%.1f\n",
-      currentTime,
+      "photo=%d touch_adc=%d soil=%d(%.0f%%) temp=%.1fC humidity=%.1f%% oled=%s\n",
       currentPhotoValue,
-      PHOTO_RISING_THRESHOLD,
-      touchPressed,
-      touchRisingEdge,
-      screenShouldBeOn,
-      screenShouldBeOn ? static_cast<unsigned long>(screenOnUntilMs - currentTime) : 0UL,
+      touchRawValue,
       lastSoilRawValue,
-      soilMoistureValue,
       soilMoisturePercent,
-      lastRawTemperature,
-      lastRawHumidity,
       temperatureValue,
-      humidityValue
+      humidityValue,
+      screenShouldBeOn ? "on" : "off"
     );
 
     if (screenShouldBeOn)
