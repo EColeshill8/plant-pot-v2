@@ -9,14 +9,14 @@
 const uint8_t SOIL_MOISTURE_PIN = 0;          // GPIO0 / ADC1_CH0
 const uint8_t DHT_PIN = 4;                    // GPIO4
 const uint8_t PHOTO_RESISTOR_PIN = 1;         // GPIO1 / ADC1_CH1
-const uint8_t TOUCH_PIN = 3;                  // GPIO3, active-high touch sensor output
+const uint8_t TOUCH_PIN = 3;                  // GPIO3, active-high digital touch input
 const uint8_t OLED_SDA_PIN = 7;               // GPIO7, connected to the OLED SDA wire
 const uint8_t OLED_SCL_PIN = 6;               // GPIO6, connected to the OLED SCL wire
 
 // Thresholds and timings
 const uint16_t PHOTO_RISING_THRESHOLD = 3500;     // Below this = dark, above this = bright enough to wake display
 const uint32_t SCREEN_ON_TIME_MS = 15000;          // Keep OLED visible for 15 seconds after trigger
-const uint32_t SENSOR_READ_INTERVAL_MS = 500;     // Read sensors every 0.5 seconds
+const uint32_t SENSOR_READ_INTERVAL_MS = 1000;    // DHT11 readings and serial diagnostics every second
 
 // Soil moisture calibration.
 // The raw ADC value from a capacitive probe usually sits between a dry and wet reading.
@@ -44,6 +44,9 @@ bool displayWasOn = false;
 unsigned long screenOnUntilMs = 0;
 unsigned long lastSensorReadMs = 0;
 int lastPhotoValue = 0;
+int lastSoilRawValue = 0;
+float lastRawTemperature = NAN;
+float lastRawHumidity = NAN;
 float soilMoistureValue = 0.0f;
 float soilMoisturePercent = 0.0f;
 float temperatureValue = 0.0f;
@@ -82,7 +85,8 @@ void updateDisplayPower(bool shouldBeOn)
 void readSensors()
 {
   // Soil moisture is an analog reading, so smooth it with EMA before converting to a percent.
-  const float rawSoilValue = analogRead(SOIL_MOISTURE_PIN);
+  lastSoilRawValue = analogRead(SOIL_MOISTURE_PIN);
+  const float rawSoilValue = lastSoilRawValue;
   if (soilMoistureValue == 0.0f)
   {
     soilMoistureValue = rawSoilValue;
@@ -101,10 +105,10 @@ void readSensors()
   );
 
   // DHT11 can be noisy or drop reads, so smooth the temperature and humidity values too.
-  const float rawTemperature = dht.readTemperature();
-  const float rawHumidity = dht.readHumidity();
+  lastRawTemperature = dht.readTemperature();
+  lastRawHumidity = dht.readHumidity();
 
-  if (isnan(rawTemperature))
+  if (isnan(lastRawTemperature))
   {
     temperatureValue = -999.0f;
   }
@@ -112,15 +116,15 @@ void readSensors()
   {
     if (temperatureValue == 0.0f)
     {
-      temperatureValue = rawTemperature;
+      temperatureValue = lastRawTemperature;
     }
     else
     {
-      temperatureValue = emaFilter(temperatureValue, rawTemperature, EMA_ALPHA);
+      temperatureValue = emaFilter(temperatureValue, lastRawTemperature, EMA_ALPHA);
     }
   }
 
-  if (isnan(rawHumidity))
+  if (isnan(lastRawHumidity))
   {
     humidityValue = -999.0f;
   }
@@ -128,11 +132,11 @@ void readSensors()
   {
     if (humidityValue == 0.0f)
     {
-      humidityValue = rawHumidity;
+      humidityValue = lastRawHumidity;
     }
     else
     {
-      humidityValue = emaFilter(humidityValue, rawHumidity, EMA_ALPHA);
+      humidityValue = emaFilter(humidityValue, lastRawHumidity, EMA_ALPHA);
     }
   }
 }
@@ -241,7 +245,7 @@ void setup()
   dht.begin();
   pinMode(SOIL_MOISTURE_PIN, INPUT);
   pinMode(PHOTO_RESISTOR_PIN, INPUT);
-  pinMode(TOUCH_PIN, INPUT);
+  pinMode(TOUCH_PIN, INPUT_PULLDOWN);
 
   // Start with screen off.
   updateDisplayPower(false);
@@ -257,23 +261,26 @@ void loop()
   const int currentPhotoValue = analogRead(PHOTO_RESISTOR_PIN);
   const bool photoRisingEdge = (currentPhotoValue >= PHOTO_RISING_THRESHOLD) && (lastPhotoValue < PHOTO_RISING_THRESHOLD);
 
-  // The touch sensor drives GPIO3 high when touched.
+  // GPIO3 is treated as an active-high touch input.
   const bool touchPressed = (digitalRead(TOUCH_PIN) == HIGH);
+  static bool previousTouchPressed = false;
+  const bool touchRisingEdge = touchPressed && !previousTouchPressed;
 
   // If the photo sensor sees a rising edge, start a new 15-second display timer.
   if (photoRisingEdge)
   {
     screenOnUntilMs = currentTime + SCREEN_ON_TIME_MS;
+    Serial.printf("event=photo_wake value=%d threshold=%u\n", currentPhotoValue, PHOTO_RISING_THRESHOLD);
   }
 
-  // If the user presses the touch sensor, force the display on.
-  if (touchPressed)
+  // A held or floating-high input should not keep extending the display timer.
+  if (touchRisingEdge)
   {
     screenOnUntilMs = currentTime + SCREEN_ON_TIME_MS;
+    Serial.println("event=touch_wake");
   }
 
-  // Screen ON if timer has not expired OR the touch sensor is being touched.
-  const bool screenShouldBeOn = (currentTime < screenOnUntilMs) || touchPressed;
+  const bool screenShouldBeOn = (static_cast<int32_t>(screenOnUntilMs - currentTime) > 0);
 
   if (screenShouldBeOn != displayWasOn)
   {
@@ -281,19 +288,38 @@ void loop()
     displayWasOn = screenShouldBeOn;
   }
 
-  // Update screen contents only when on.
-  if (screenShouldBeOn)
+  if ((currentTime - lastSensorReadMs) >= SENSOR_READ_INTERVAL_MS)
   {
-    if ((currentTime - lastSensorReadMs) >= SENSOR_READ_INTERVAL_MS)
+    readSensors();
+    lastSensorReadMs = currentTime;
+
+    Serial.printf(
+      "ms=%lu photo=%d threshold=%u touch=%d touch_edge=%d screen=%d remaining_ms=%lu soil_raw=%d soil_avg=%.0f soil_pct=%.1f dht_raw_temp=%.1f dht_raw_humidity=%.1f temp=%.1f humidity=%.1f\n",
+      currentTime,
+      currentPhotoValue,
+      PHOTO_RISING_THRESHOLD,
+      touchPressed,
+      touchRisingEdge,
+      screenShouldBeOn,
+      screenShouldBeOn ? static_cast<unsigned long>(screenOnUntilMs - currentTime) : 0UL,
+      lastSoilRawValue,
+      soilMoistureValue,
+      soilMoisturePercent,
+      lastRawTemperature,
+      lastRawHumidity,
+      temperatureValue,
+      humidityValue
+    );
+
+    if (screenShouldBeOn)
     {
-      readSensors();
-      lastSensorReadMs = currentTime;
       drawScreen();
     }
   }
 
   // Keep the last photo reading for rising-edge detection.
   lastPhotoValue = currentPhotoValue;
+  previousTouchPressed = touchPressed;
 
   delay(50);
 }
