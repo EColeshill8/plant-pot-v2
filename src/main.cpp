@@ -14,7 +14,7 @@ const uint8_t OLED_SDA_PIN = 7;               // GPIO7, connected to the OLED SD
 const uint8_t OLED_SCL_PIN = 6;               // GPIO6, connected to the OLED SCL wire
 
 // Thresholds and timings
-const uint16_t PHOTO_RISING_THRESHOLD = 3500;     // Below this = dark, above this = bright enough to wake display
+const uint16_t PHOTO_RISING_THRESHOLD = 650;     // Below this = dark, above this = bright enough to wake display
 const uint32_t SCREEN_ON_TIME_MS = 15000;          // Keep OLED visible for 15 seconds after trigger
 const uint32_t SENSOR_READ_INTERVAL_MS = 1000;    // DHT11 readings and serial diagnostics every second
 
